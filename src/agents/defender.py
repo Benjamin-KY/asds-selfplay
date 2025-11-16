@@ -14,6 +14,10 @@ from anthropic import Anthropic
 
 from src.knowledge.graph import SecurityKnowledgeGraph
 from src.prompts.generator import DynamicPromptGenerator
+from src.utils.config import get_config
+from src.utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -74,11 +78,21 @@ class DefenderAgent:
         self,
         knowledge_graph: SecurityKnowledgeGraph,
         llm_client: Optional[Anthropic] = None,
-        model: str = "claude-sonnet-4-5-20250929"
+        model: Optional[str] = None,
+        rl_store: Optional[Any] = None  # LightningStore, imported dynamically to avoid circular deps
     ):
         self.kg = knowledge_graph
         self.prompt_generator = DynamicPromptGenerator(knowledge_graph)
-        self.model = model
+
+        # Load config
+        config = get_config()
+        self.model = model or config.model.name
+        self.temperature = config.model.temperature['analysis']
+        self.max_tokens = config.model.max_tokens['analysis']
+
+        # RL integration
+        self.rl_store = rl_store
+        self.current_trace_id: Optional[str] = None
 
         # Initialize LLM client
         if llm_client:
@@ -88,6 +102,8 @@ class DefenderAgent:
             if not api_key:
                 raise ValueError("ANTHROPIC_API_KEY not set")
             self.llm = Anthropic(api_key=api_key)
+
+        logger.info(f"DefenderAgent initialized with model={self.model}")
 
     def analyze(
         self,
@@ -108,6 +124,14 @@ class DefenderAgent:
         """
         start_time = datetime.now()
 
+        # Emit trace start (if RL store available)
+        if self.rl_store and self.current_trace_id:
+            self.rl_store.emit_span(
+                trace_id=self.current_trace_id,
+                span_type="analysis_start",
+                data={"code_length": len(code), "language": language}
+            )
+
         # Generate dynamic prompt with learned patterns
         prompt = self.prompt_generator.generate_analysis_prompt(
             code=code,
@@ -115,22 +139,46 @@ class DefenderAgent:
             context=context
         )
 
+        # Emit prompt span
+        if self.rl_store and self.current_trace_id:
+            self.rl_store.emit_span(
+                trace_id=self.current_trace_id,
+                span_type="prompt",
+                data={"prompt": prompt[:500], "prompt_length": len(prompt)}  # Truncate for storage
+            )
+
         # Call LLM for analysis
         try:
             response = self.llm.messages.create(
                 model=self.model,
-                max_tokens=4096,
-                temperature=0.1,  # Low temperature for consistency
+                max_tokens=self.max_tokens,
+                temperature=self.temperature,
                 messages=[{"role": "user", "content": prompt}]
             )
 
             response_text = response.content[0].text
 
+            # Emit LLM response span
+            if self.rl_store and self.current_trace_id:
+                self.rl_store.emit_span(
+                    trace_id=self.current_trace_id,
+                    span_type="llm_response",
+                    data={"response_length": len(response_text)}
+                )
+
             # Parse findings from response
             findings, patterns_checked = self._parse_response(response_text)
 
+            # Emit patterns checked span
+            if self.rl_store and self.current_trace_id:
+                self.rl_store.emit_span(
+                    trace_id=self.current_trace_id,
+                    span_type="patterns_checked",
+                    data={"patterns": patterns_checked}
+                )
+
         except Exception as e:
-            print(f"LLM error: {e}")
+            logger.error(f"LLM error during analysis: {e}", exc_info=True)
             findings = []
             patterns_checked = []
 

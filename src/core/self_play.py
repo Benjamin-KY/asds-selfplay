@@ -13,6 +13,10 @@ from pathlib import Path
 from src.agents.defender import DefenderAgent, Finding
 from src.agents.attacker import AttackerAgent, Exploit
 from src.knowledge.graph import SecurityKnowledgeGraph
+from src.utils.config import get_config
+from src.utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -62,16 +66,36 @@ class SelfPlayTrainer:
         knowledge_graph: SecurityKnowledgeGraph,
         defender: DefenderAgent,
         attacker: AttackerAgent,
-        episodes_dir: str = "data/episodes"
+        episodes_dir: Optional[str] = None,
+        rl_store: Optional[Any] = None,
+        rl_trainer: Optional[Any] = None
     ):
         self.kg = knowledge_graph
         self.defender = defender
         self.attacker = attacker
-        self.episodes_dir = Path(episodes_dir)
+
+        # Load config
+        config = get_config()
+        self.episodes_dir = Path(episodes_dir or config.training.episodes_dir)
         self.episodes_dir.mkdir(parents=True, exist_ok=True)
+
+        # RL integration
+        self.rl_store = rl_store
+        self.rl_trainer = rl_trainer
+        self.rl_enabled = config.agent_lightning.enabled and rl_store is not None
+
+        # Reward function weights from config
+        self.reward_weights = {
+            'true_positive': config.rewards.true_positive,
+            'false_positive': config.rewards.false_positive,
+            'false_negative': config.rewards.false_negative,
+            'fix_worked': config.rewards.fix_worked
+        }
 
         self.episode_count = 0
         self.episodes: List[TrainingEpisode] = []
+
+        logger.info(f"SelfPlayTrainer initialized (RL enabled: {self.rl_enabled})")
 
     def train_episode(
         self,
@@ -91,9 +115,21 @@ class SelfPlayTrainer:
         """
         self.episode_count += 1
 
+        logger.info(f"Starting episode {self.episode_count}")
+
         print(f"\n{'='*80}")
         print(f"Episode {self.episode_count}")
         print(f"{'='*80}\n")
+
+        # RL: Start trace if enabled
+        if self.rl_enabled:
+            trace_id = self.rl_store.start_trace(
+                agent_name="defender",
+                episode_number=self.episode_count,
+                metadata={"code_length": len(code_sample), "language": language}
+            )
+            self.defender.current_trace_id = trace_id
+            logger.debug(f"Started RL trace: {trace_id}")
 
         # Phase 1: Defense
         print("🛡️  DEFENDER: Analyzing code...")
@@ -152,6 +188,26 @@ class SelfPlayTrainer:
             defender_findings=defense_trace.findings,
             attacker_exploits=attack_original.exploits
         )
+
+        # Phase 8: RL reward emission and training
+        if self.rl_enabled:
+            # Emit reward
+            self.rl_store.emit_reward(
+                trace_id=self.defender.current_trace_id,
+                reward=reward,
+                metadata=metrics
+            )
+
+            # End trace
+            self.rl_store.end_trace(self.defender.current_trace_id)
+            self.defender.current_trace_id = None
+
+            # Run training step if trainer is available
+            if self.rl_trainer:
+                training_metrics = self.rl_trainer.train_step(self.episode_count)
+                if training_metrics:
+                    logger.info(f"RL training step: {training_metrics}")
+                    print(f"\n🤖 RL TRAINING: Applied update (improvement: {training_metrics.get('expected_improvement', 0):.3f})")
 
         # Create episode record
         episode = TrainingEpisode(
@@ -232,29 +288,23 @@ class SelfPlayTrainer:
         """
         Calculate reward for this episode.
 
-        Reward function:
+        Reward function (weights from config):
         - Reward true positives (correctly identified vulnerabilities)
         - Penalize false positives (wasted effort)
         - Heavily penalize false negatives (missed vulnerabilities)
         - Bonus for fixes that work
-        - Penalty for fixes that don't work
         """
         tp = metrics['true_positives']
         fp = metrics['false_positives']
         fn = metrics['false_negatives']
         fixes_worked = metrics['fixes_that_worked']
 
-        # Weights (tune these)
-        w_tp = 10.0   # Value of catching vulnerability
-        w_fp = 5.0    # Cost of false alarm
-        w_fn = 15.0   # High cost of missing vulnerability
-        w_fix = 20.0  # High value for working fix
-
+        # Use weights from config
         reward = (
-            w_tp * tp
-            - w_fp * fp
-            - w_fn * fn
-            + w_fix * fixes_worked
+            self.reward_weights['true_positive'] * tp
+            + self.reward_weights['false_positive'] * fp  # Already negative in config
+            + self.reward_weights['false_negative'] * fn   # Already negative in config
+            + self.reward_weights['fix_worked'] * fixes_worked
         )
 
         return reward
