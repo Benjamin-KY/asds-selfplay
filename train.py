@@ -14,9 +14,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from src.knowledge.graph import SecurityKnowledgeGraph
+from src.patterns.library import initialize_pattern_library
 from src.agents.defender import DefenderAgent
 from src.agents.attacker import AttackerAgent
 from src.core.self_play import SelfPlayTrainer
+from src.rl.store import LightningStore
+from src.rl.trainer import Trainer
+from src.utils.config import get_config
+from src.utils.logging_config import setup_logging
 from examples.vulnerable_samples import get_vulnerable_only, get_all_samples
 
 
@@ -44,6 +49,12 @@ def main():
 
     args = parser.parse_args()
 
+    # Setup logging
+    setup_logging()
+
+    # Load config
+    config = get_config()
+
     # Check API key
     if not os.getenv("ANTHROPIC_API_KEY"):
         print("Error: ANTHROPIC_API_KEY not set")
@@ -55,14 +66,41 @@ def main():
     print("="*80)
     print(f"Episodes: {args.episodes}")
     print(f"Dataset: {args.dataset}")
+    print(f"RL Enabled: {config.agent_lightning.enabled}")
     print()
 
     # Initialize components
     print("Initializing components...")
     kg = SecurityKnowledgeGraph()
-    defender = DefenderAgent(kg)
+
+    # Initialize pattern library (52+ vulnerability patterns)
+    pattern_count = initialize_pattern_library(kg)
+    print(f"Loaded {pattern_count} vulnerability patterns into knowledge graph")
+
+    # Initialize RL store and trainer if enabled
+    rl_store = None
+    rl_trainer = None
+
+    if config.agent_lightning.enabled:
+        print("Initializing RL infrastructure...")
+        rl_store = LightningStore()
+        rl_trainer = Trainer(
+            store=rl_store,
+            algorithm=config.agent_lightning.algorithm
+        )
+        print(f"  RL Algorithm: {config.agent_lightning.algorithm}")
+        print(f"  Batch Size: {config.agent_lightning.batch_size}")
+        print(f"  Update Frequency: every {config.agent_lightning.update_frequency} episodes")
+
+    defender = DefenderAgent(kg, rl_store=rl_store)
     attacker = AttackerAgent()
-    trainer = SelfPlayTrainer(kg, defender, attacker)
+    trainer = SelfPlayTrainer(
+        kg,
+        defender,
+        attacker,
+        rl_store=rl_store,
+        rl_trainer=rl_trainer
+    )
 
     # Get dataset
     if args.dataset == "vulnerable":
@@ -116,6 +154,27 @@ def main():
     print(f"  Average effectiveness: {kg_stats['avg_effectiveness']:.1%}")
 
     print("\nEpisode data saved to: data/episodes/")
+
+    # Show RL training summary if enabled
+    if config.agent_lightning.enabled and rl_trainer:
+        print("\n" + "="*80)
+        print("RL TRAINING SUMMARY")
+        print("="*80)
+
+        rl_summary = rl_trainer.get_training_summary()
+        print(f"\nUpdates applied: {rl_summary['updates_applied']}")
+        print(f"Best performance: {rl_summary['best_performance']:.3f}")
+
+        if rl_summary['pattern_recommendations']:
+            print(f"\nTop pattern recommendations:")
+            for i, (pattern_id, score) in enumerate(rl_summary['pattern_recommendations'][:5], 1):
+                print(f"  {i}. {pattern_id}: {score:.3f}")
+
+        print(f"\nRL store stats:")
+        store_stats = rl_summary['store_stats']
+        print(f"  Total traces: {store_stats.get('total_traces', 0)}")
+        print(f"  Average reward: {store_stats.get('average_reward', 0):.2f}")
+
     print()
 
 

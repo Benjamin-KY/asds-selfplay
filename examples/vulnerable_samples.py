@@ -108,6 +108,203 @@ def process_request(request):
 ''',
         "expected_vulnerabilities": ["SQL Injection", "Command Injection", "Insecure Deserialization"]
     },
+    {
+        "name": "XSS - Reflected",
+        "language": "python",
+        "code": '''
+from flask import request, render_template_string
+
+def search():
+    query = request.args.get('q')
+    template = f'<h1>Search results for: {query}</h1>'
+    return render_template_string(template)
+''',
+        "expected_vulnerabilities": ["Cross-Site Scripting"]
+    },
+    {
+        "name": "XSS - Stored",
+        "language": "python",
+        "code": '''
+def display_comment(comment_id):
+    comment = db.get_comment(comment_id)
+    return f'<div class="comment">{comment.text}</div>'
+''',
+        "expected_vulnerabilities": ["Cross-Site Scripting"]
+    },
+    {
+        "name": "Authentication Bypass - Weak Password Check",
+        "language": "python",
+        "code": '''
+def login(username, password):
+    user = get_user(username)
+    if user and user.password == password:
+        return create_session(user)
+    return None
+''',
+        "expected_vulnerabilities": ["Authentication Bypass"]
+    },
+    {
+        "name": "CSRF - Missing Token",
+        "language": "python",
+        "code": '''
+from flask import request
+
+def transfer_money():
+    amount = request.form.get('amount')
+    to_account = request.form.get('to_account')
+    current_user.transfer(amount, to_account)
+    return "Transfer complete"
+''',
+        "expected_vulnerabilities": ["Cross-Site Request Forgery"]
+    },
+    {
+        "name": "SSRF - Unvalidated URL Fetch",
+        "language": "python",
+        "code": '''
+import requests
+
+def fetch_resource(url):
+    response = requests.get(url)
+    return response.content
+''',
+        "expected_vulnerabilities": ["Server-Side Request Forgery"]
+    },
+    {
+        "name": "XXE - XML External Entity",
+        "language": "python",
+        "code": '''
+import xml.etree.ElementTree as ET
+
+def parse_xml(xml_data):
+    tree = ET.fromstring(xml_data)
+    return tree
+''',
+        "expected_vulnerabilities": ["XML External Entity"]
+    },
+    {
+        "name": "Cryptographic Failure - Weak Hash",
+        "language": "python",
+        "code": '''
+import hashlib
+
+def hash_password(password):
+    return hashlib.md5(password.encode()).hexdigest()
+''',
+        "expected_vulnerabilities": ["Weak Cryptographic Hash"]
+    },
+    {
+        "name": "Cryptographic Failure - Hardcoded Key",
+        "language": "python",
+        "code": '''
+from cryptography.fernet import Fernet
+
+def encrypt_data(data):
+    key = b'hardcoded_encryption_key_12345678'
+    cipher = Fernet(key)
+    return cipher.encrypt(data)
+''',
+        "expected_vulnerabilities": ["Hardcoded Encryption Key"]
+    },
+    {
+        "name": "Session Management - Missing Timeout",
+        "language": "python",
+        "code": '''
+def create_session(user):
+    session_id = generate_random_id()
+    sessions[session_id] = {
+        'user_id': user.id,
+        'created_at': datetime.now()
+        # No expiration/timeout configured
+    }
+    return session_id
+''',
+        "expected_vulnerabilities": ["Session Management"]
+    },
+    {
+        "name": "Access Control - Missing Authorization",
+        "language": "python",
+        "code": '''
+def delete_user(user_id):
+    # No check if current user is authorized to delete
+    db.delete_user(user_id)
+    return "User deleted"
+''',
+        "expected_vulnerabilities": ["Broken Access Control"]
+    },
+    {
+        "name": "NoSQL Injection - MongoDB",
+        "language": "python",
+        "code": '''
+def find_user(username):
+    query = {"username": username}
+    # If username is {"$ne": null}, returns all users
+    return db.users.find_one(query)
+''',
+        "expected_vulnerabilities": ["NoSQL Injection"]
+    },
+    {
+        "name": "ReDoS - Catastrophic Backtracking",
+        "language": "python",
+        "code": '''
+import re
+
+def validate_email(email):
+    pattern = r'^([a-zA-Z0-9]+)*@[a-zA-Z0-9]+\\.[a-zA-Z]+$'
+    return re.match(pattern, email)
+''',
+        "expected_vulnerabilities": ["Regular Expression Denial of Service"]
+    },
+    {
+        "name": "Race Condition - TOCTOU",
+        "language": "python",
+        "code": '''
+import os
+
+def safe_write(filename, data):
+    if not os.path.exists(filename):
+        # Race condition: file could be created here
+        with open(filename, 'w') as f:
+            f.write(data)
+''',
+        "expected_vulnerabilities": ["Race Condition"]
+    },
+    {
+        "name": "Open Redirect",
+        "language": "python",
+        "code": '''
+from flask import request, redirect
+
+def redirect_after_login():
+    next_url = request.args.get('next')
+    return redirect(next_url)
+''',
+        "expected_vulnerabilities": ["Open Redirect"]
+    },
+    {
+        "name": "Information Disclosure - Stack Trace",
+        "language": "python",
+        "code": '''
+def process_data(data):
+    try:
+        result = complex_operation(data)
+        return result
+    except Exception as e:
+        # Exposes internal implementation details
+        return str(e)
+''',
+        "expected_vulnerabilities": ["Information Disclosure"]
+    },
+    {
+        "name": "Insecure Direct Object Reference",
+        "language": "python",
+        "code": '''
+def get_invoice(invoice_id):
+    # No authorization check
+    invoice = db.get_invoice(invoice_id)
+    return invoice
+''',
+        "expected_vulnerabilities": ["Insecure Direct Object Reference"]
+    },
 ]
 
 

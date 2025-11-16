@@ -1,0 +1,96 @@
+# ASDS Self-Play Configuration
+
+# Model settings
+model:
+  name: "claude-sonnet-4-5-20250929"
+  temperature:
+    analysis: 0.1  # Low for consistency in analysis
+    exploit: 0.3   # Higher for creative exploit discovery
+    fix: 0.1       # Low for deterministic fixes
+  max_tokens:
+    analysis: 4096
+    exploit: 2048
+    fix: 2048
+
+# Reward function weights (Game theory optimized - see AGENT_ANALYSIS_TODO.md)
+# These weights eliminate over-reporting bias by balancing FP penalty with FN penalty
+rewards:
+  true_positive: 15.0      # Value of correctly identifying vulnerability (+50% from 10.0)
+  false_positive: -12.0    # Cost of false alarm (+140% from -5.0) - CRITICAL FIX
+  false_negative: -18.0    # High cost of missing vulnerability (+20% from -15.0)
+  fix_worked: 15.0         # Value for working fix (-25% from 20.0, prevents fix inflation)
+  fix_failed: -3.0         # Penalty if fix didn't work
+
+  # Calibration bonus (rewards well-calibrated confidence predictions)
+  calibration_bonus_weight: 10.0  # Multiplier for (1 - brier_score), encourages honest uncertainty
+
+  # Exploration bonuses (encourages pattern diversity and novel discoveries)
+  low_observation_bonus: 5.0  # Bonus per low-observation pattern used (observations < 10)
+  exploration_threshold: 10   # Observation count threshold for "low observation"
+
+  # Expected impact: +15-25% precision, 2-3x learning speed, eliminates gaming, +40% pattern diversity
+
+# Attacker reward function (Game theory optimized - creates adversarial pressure)
+# The attacker is rewarded for finding vulnerabilities the defender missed
+attacker_rewards:
+  false_negatives: 15.0      # Found what defender missed
+  true_positives: -5.0       # Penalty for being detected
+  fixes_broken: 25.0         # High value for breaking defender's fixes
+  novel_exploits: 10.0       # Bonus for discovering new vulnerability types
+
+  # Expected impact: Creates strong adversarial pressure, improves defender performance
+
+# Pattern effectiveness thresholds
+patterns:
+  min_effectiveness: 0.7        # Threshold for "effective" patterns
+  max_ineffective: 0.3          # Threshold for "ineffective" patterns
+  min_observations: 3           # Minimum observations before trusting metrics
+  prune_threshold: 0.2          # Prune if effectiveness below this
+  prune_min_observations: 20    # Only prune after this many observations
+  recent_patterns_limit: 5
+  effective_patterns_limit: 5
+
+# Prompt generation settings
+prompts:
+  include_effective: true
+  include_recent: true
+  include_ineffective_warnings: true
+  max_pattern_examples: 5
+
+# Agent Lightning / RL settings
+agent_lightning:
+  enabled: true
+  algorithm: "GRPO"  # Group Relative Policy Optimization
+  learning_rate: 1e-4
+  batch_size: 32
+  update_frequency: 10  # Update policy every N episodes
+  episodes_per_batch: 32
+  exploration_rate: 0.1
+  save_frequency: 100  # Save checkpoint every N episodes
+
+# Training settings
+training:
+  episodes_dir: "data/episodes"
+  checkpoints_dir: "data/checkpoints"
+  logs_dir: "logs"
+  save_traces: true
+  verbose: false
+
+# Database settings
+database:
+  patterns_db: "data/patterns/knowledge.db"
+  connection_pool_size: 5
+
+# Logging
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/asds_selfplay.log"
+  console: true
+
+# Performance
+performance:
+  parallel_episodes: false
+  max_workers: 4
+  cache_patterns: true
+  batch_llm_calls: false

@@ -2,13 +2,17 @@
 anthropic>=0.21.0
 openai>=1.0.0  # Alternative LLM option
 
+# Scientific computing (for RL algorithms)
+numpy>=1.24.0
+scipy>=1.10.0
+
 # Knowledge graph and data
 networkx>=3.0
 sqlite-utils>=3.34
 
 # Agent Lightning (RL framework)
-# Note: May need to install from GitHub
-# git+https://github.com/microsoft/agent-lightning.git
+# Note: We've implemented a compatible version internally
+# Original: git+https://github.com/microsoft/agent-lightning.git
 
 # Analysis and utilities
 pyyaml>=6.0
@@ -18,12 +22,16 @@ pydantic>=2.0.0
 # Metrics and visualization
 matplotlib>=3.7.0
 pandas>=2.0.0
+seaborn>=0.12.0
 
 # Testing
 pytest>=7.0.0
 pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0  # Coverage reporting
+pytest-mock>=3.10.0  # Mocking utilities
 
 # Development
 black>=23.0.0
 mypy>=1.0.0
 ruff>=0.1.0
+ipython>=8.0.0  # Interactive shell

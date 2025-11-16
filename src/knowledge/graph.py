@@ -46,6 +46,10 @@ class SecurityPattern:
     false_positives: int = 0  # Attacker couldn't exploit
     false_negatives: int = 0  # Attacker found but defender missed
 
+    # Calibration metrics (for Brier score calculation)
+    calibration_sum_squared_errors: float = 0.0  # Sum of (confidence - actual)^2
+    calibration_count: int = 0  # Number of calibration observations
+
     # Derived metrics
     @property
     def precision(self) -> float:
@@ -73,6 +77,18 @@ class SecurityPattern:
         if self.observations < 3:
             return 0.5  # Neutral for new patterns
         return self.f1_score
+
+    @property
+    def brier_score(self) -> float:
+        """
+        Brier score for calibration (0 = perfect, 1 = worst).
+
+        Measures how well-calibrated the confidence predictions are.
+        Lower is better.
+        """
+        if self.calibration_count == 0:
+            return 0.5  # Neutral for no data
+        return self.calibration_sum_squared_errors / self.calibration_count
 
     def to_dict(self) -> dict:
         """Convert to dictionary for storage"""
@@ -302,7 +318,8 @@ class SecurityKnowledgeGraph:
         self,
         pattern_id: str,
         is_true_positive: bool,
-        is_false_negative: bool = False
+        is_false_negative: bool = False,
+        confidence: Optional[float] = None
     ):
         """
         Update pattern metrics based on attacker feedback.
@@ -313,6 +330,7 @@ class SecurityKnowledgeGraph:
             pattern_id: Pattern being evaluated
             is_true_positive: Attacker confirmed this was a real vulnerability
             is_false_negative: Attacker found vulnerability that defender missed
+            confidence: Defender's confidence in the finding (0-1) for calibration tracking
         """
         if pattern_id not in self.patterns:
             return
@@ -326,6 +344,14 @@ class SecurityKnowledgeGraph:
             pattern.false_negatives += 1
         else:
             pattern.false_positives += 1
+
+        # Update calibration metrics (Brier score)
+        if confidence is not None:
+            # actual = 1.0 if TP, 0.0 if FP
+            actual = 1.0 if is_true_positive else 0.0
+            squared_error = (confidence - actual) ** 2
+            pattern.calibration_sum_squared_errors += squared_error
+            pattern.calibration_count += 1
 
         # Update in graph
         self.graph.nodes[pattern_id].update(pattern.to_dict())
@@ -441,6 +467,37 @@ class SecurityKnowledgeGraph:
             "high_effectiveness_patterns": len(self.get_effective_patterns()),
             "low_effectiveness_patterns": len(self.get_ineffective_patterns())
         }
+
+    def get_pattern(self, pattern_id: str) -> Optional[SecurityPattern]:
+        """Get a specific pattern by ID"""
+        return self.patterns.get(pattern_id)
+
+    def get_all_patterns(self) -> List[SecurityPattern]:
+        """Get all patterns in the knowledge graph"""
+        return list(self.patterns.values())
+
+    def save(self):
+        """Explicitly save all patterns to database (normally auto-saved)"""
+        # Patterns are auto-saved when added via add_pattern()
+        # This method is provided for explicit save operations
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        for pattern in self.patterns.values():
+            cursor.execute("""
+                INSERT OR REPLACE INTO patterns (
+                    id, name, pattern_type, code_example, language, risk_level, cwe_id,
+                    observations, true_positives, false_positives, false_negatives
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                pattern.id, pattern.name, pattern.pattern_type.value,
+                pattern.code_example, pattern.language, pattern.risk_level,
+                pattern.cwe_id, pattern.observations, pattern.true_positives,
+                pattern.false_positives, pattern.false_negatives
+            ))
+
+        conn.commit()
+        conn.close()
 
     def export_for_visualization(self, output_path: str = "data/graph_viz.json"):
         """Export graph for visualization"""
