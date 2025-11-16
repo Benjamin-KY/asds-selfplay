@@ -59,6 +59,8 @@ class TestRewardCalculation:
         assert metrics["true_positives"] == 1
         assert metrics["false_positives"] == 0
         assert metrics["false_negatives"] == 0
+        assert "fixes_broken" in metrics
+        assert "novel_exploit_types" in metrics
 
     def test_false_positive_detection(self):
         """Test false positive (defender found but attacker didn't)"""
@@ -169,6 +171,66 @@ class TestRewardCalculation:
 
         # 3 - 1 = 2 fixes worked
         assert metrics["fixes_that_worked"] == 2
+
+    def test_attacker_reward_calculation(self):
+        """Test attacker reward function"""
+        from src.core.self_play import SelfPlayTrainer
+        from src.knowledge.graph import SecurityKnowledgeGraph
+        from src.agents.defender import DefenderAgent
+        from src.agents.attacker import AttackerAgent
+        from unittest.mock import Mock
+        import tempfile
+
+        kg = SecurityKnowledgeGraph(db_path=tempfile.mktemp())
+        mock_llm = Mock()
+        defender = DefenderAgent(kg, llm_client=mock_llm)
+        attacker = AttackerAgent(llm_client=mock_llm)
+        trainer = SelfPlayTrainer(kg, defender, attacker)
+
+        # Test scenario: attacker found 2 FN, defender found 1 TP, 1 fix broken, 1 novel type
+        metrics = {
+            'false_negatives': 2,
+            'true_positives': 1,
+            'fixes_broken': 1,
+            'novel_exploit_types': 1
+        }
+
+        attacker_reward = trainer._calculate_attacker_reward(metrics)
+
+        # Expected: 15*2 + (-5)*1 + 25*1 + 10*1 = 30 - 5 + 25 + 10 = 60
+        assert attacker_reward == 60.0
+
+    def test_novel_exploit_detection(self):
+        """Test detection of novel exploit types"""
+        from src.core.self_play import SelfPlayTrainer
+        from src.knowledge.graph import SecurityKnowledgeGraph
+        from src.agents.defender import DefenderAgent
+        from src.agents.attacker import AttackerAgent
+        from unittest.mock import Mock
+        import tempfile
+
+        kg = SecurityKnowledgeGraph(db_path=tempfile.mktemp())
+        mock_llm = Mock()
+        defender = DefenderAgent(kg, llm_client=mock_llm)
+        attacker = AttackerAgent(llm_client=mock_llm)
+        trainer = SelfPlayTrainer(kg, defender, attacker)
+
+        # First episode: sql_injection
+        exploits1 = [
+            Exploit("e1", "sql_injection", "CWE-89", "test", "line 1", True, "test", "test")
+        ]
+
+        metrics1 = trainer._calculate_metrics([], exploits1, [])
+        assert metrics1["novel_exploit_types"] == 1  # First time seeing sql_injection
+
+        # Second episode: sql_injection again + xss (new)
+        exploits2 = [
+            Exploit("e2", "sql_injection", "CWE-89", "test", "line 1", True, "test", "test"),
+            Exploit("e3", "xss", "CWE-79", "test", "line 2", True, "test", "test")
+        ]
+
+        metrics2 = trainer._calculate_metrics([], exploits2, [])
+        assert metrics2["novel_exploit_types"] == 1  # Only xss is new
 
 
 class TestMatchingLogic:

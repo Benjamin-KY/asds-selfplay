@@ -5,7 +5,7 @@ Orchestrates defender vs attacker episodes for learning.
 """
 
 import json
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
@@ -37,10 +37,13 @@ class TrainingEpisode:
 
     # Learning metrics
     reward: float
+    attacker_reward: float
     true_positives: int
     false_positives: int
     false_negatives: int
     fixes_that_worked: int
+    fixes_broken: int
+    novel_exploit_types: int
 
     timestamp: datetime
 
@@ -92,8 +95,19 @@ class SelfPlayTrainer:
             'fix_worked': config.rewards.fix_worked
         }
 
+        # Attacker reward function weights from config
+        self.attacker_reward_weights = {
+            'false_negatives': config.attacker_rewards.false_negatives,
+            'true_positives': config.attacker_rewards.true_positives,
+            'fixes_broken': config.attacker_rewards.fixes_broken,
+            'novel_exploits': config.attacker_rewards.novel_exploits
+        }
+
         self.episode_count = 0
         self.episodes: List[TrainingEpisode] = []
+
+        # Track historical exploit types for novelty detection
+        self.seen_exploit_types: set = set()
 
         logger.info(f"SelfPlayTrainer initialized (RL enabled: {self.rl_enabled})")
 
@@ -177,10 +191,14 @@ class SelfPlayTrainer:
         print(f"   False Positives: {metrics['false_positives']}")
         print(f"   False Negatives: {metrics['false_negatives']}")
         print(f"   Fixes that worked: {metrics['fixes_that_worked']}")
+        print(f"   Fixes broken: {metrics['fixes_broken']}")
+        print(f"   Novel exploit types: {metrics['novel_exploit_types']}")
 
-        # Phase 6: Calculate reward
+        # Phase 6: Calculate rewards
         reward = self._calculate_reward(metrics)
-        print(f"\n💰 REWARD: {reward:.2f}")
+        attacker_reward = self._calculate_attacker_reward(metrics)
+        print(f"\n💰 DEFENDER REWARD: {reward:.2f}")
+        print(f"⚔️  ATTACKER REWARD: {attacker_reward:.2f}")
 
         # Phase 7: Update knowledge graph
         print("\n📚 LEARNING: Updating knowledge graph...")
@@ -220,10 +238,13 @@ class SelfPlayTrainer:
             fixed_exploits=attack_fixed.exploits,
             attack_time=attack_original.time_taken + attack_fixed.time_taken,
             reward=reward,
+            attacker_reward=attacker_reward,
             true_positives=metrics['true_positives'],
             false_positives=metrics['false_positives'],
             false_negatives=metrics['false_negatives'],
             fixes_that_worked=metrics['fixes_that_worked'],
+            fixes_broken=metrics['fixes_broken'],
+            novel_exploit_types=metrics['novel_exploit_types'],
             timestamp=datetime.now()
         )
 
@@ -266,11 +287,24 @@ class SelfPlayTrainer:
         # Fixes that worked: exploits blocked after fix
         fixes_worked = len(original_exploits) - len(fixed_exploits)
 
+        # Fixes broken: exploits that still work after defender's fix
+        fixes_broken = len(fixed_exploits)
+
+        # Novel exploit types: exploit types never seen before
+        current_exploit_types = {exploit.type for exploit in original_exploits}
+        novel_types = current_exploit_types - self.seen_exploit_types
+        novel_exploit_types = len(novel_types)
+
+        # Update seen exploit types
+        self.seen_exploit_types.update(current_exploit_types)
+
         return {
             "true_positives": tp,
             "false_positives": fp,
             "false_negatives": fn,
-            "fixes_that_worked": fixes_worked
+            "fixes_that_worked": fixes_worked,
+            "fixes_broken": fixes_broken,
+            "novel_exploit_types": novel_exploit_types
         }
 
     def _matches(self, finding: Finding, exploit: Exploit) -> bool:
@@ -308,6 +342,33 @@ class SelfPlayTrainer:
         )
 
         return reward
+
+    def _calculate_attacker_reward(self, metrics: Dict) -> float:
+        """
+        Calculate reward for the attacker agent.
+
+        Attacker reward function (creates adversarial pressure):
+        - Reward finding vulnerabilities defender missed (false negatives)
+        - Penalty for being detected (true positives)
+        - High reward for breaking defender's fixes (fixes_broken)
+        - Bonus for discovering novel exploit types
+
+        This creates strong adversarial pressure on the defender.
+        """
+        fn = metrics['false_negatives']
+        tp = metrics['true_positives']
+        fixes_broken = metrics['fixes_broken']
+        novel_types = metrics['novel_exploit_types']
+
+        # Use weights from config
+        attacker_reward = (
+            self.attacker_reward_weights['false_negatives'] * fn
+            + self.attacker_reward_weights['true_positives'] * tp  # Already negative in config
+            + self.attacker_reward_weights['fixes_broken'] * fixes_broken
+            + self.attacker_reward_weights['novel_exploits'] * novel_types
+        )
+
+        return attacker_reward
 
     def _update_knowledge_graph(
         self,

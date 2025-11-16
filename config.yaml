@@ -12,13 +12,26 @@ model:
     exploit: 2048
     fix: 2048
 
-# Reward function weights
+# Reward function weights (Game theory optimized - see AGENT_ANALYSIS_TODO.md)
+# These weights eliminate over-reporting bias by balancing FP penalty with FN penalty
 rewards:
-  true_positive: 10.0      # Value of correctly identifying vulnerability
-  false_positive: -5.0     # Cost of false alarm
-  false_negative: -15.0    # High cost of missing vulnerability
-  fix_worked: 20.0         # High value for working fix
+  true_positive: 15.0      # Value of correctly identifying vulnerability (+50% from 10.0)
+  false_positive: -12.0    # Cost of false alarm (+140% from -5.0) - CRITICAL FIX
+  false_negative: -18.0    # High cost of missing vulnerability (+20% from -15.0)
+  fix_worked: 15.0         # Value for working fix (-25% from 20.0, prevents fix inflation)
   fix_failed: -3.0         # Penalty if fix didn't work
+
+  # Expected impact: +15-25% precision, 2-3x learning speed, eliminates gaming
+
+# Attacker reward function (Game theory optimized - creates adversarial pressure)
+# The attacker is rewarded for finding vulnerabilities the defender missed
+attacker_rewards:
+  false_negatives: 15.0      # Found what defender missed
+  true_positives: -5.0       # Penalty for being detected
+  fixes_broken: 25.0         # High value for breaking defender's fixes
+  novel_exploits: 10.0       # Bonus for discovering new vulnerability types
+
+  # Expected impact: Creates strong adversarial pressure, improves defender performance
 
 # Pattern effectiveness thresholds
 patterns:

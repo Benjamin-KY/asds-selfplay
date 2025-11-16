@@ -29,6 +29,15 @@ class RewardsConfig:
 
 
 @dataclass
+class AttackerRewardsConfig:
+    """Attacker reward function weights"""
+    false_negatives: float
+    true_positives: float
+    fixes_broken: float
+    novel_exploits: float
+
+
+@dataclass
 class PatternsConfig:
     """Pattern effectiveness thresholds"""
     min_effectiveness: float
@@ -88,6 +97,7 @@ class Config:
         # Parse sections
         self.model = ModelConfig(**config_dict['model'])
         self.rewards = RewardsConfig(**config_dict['rewards'])
+        self.attacker_rewards = AttackerRewardsConfig(**config_dict['attacker_rewards'])
         self.patterns = PatternsConfig(**config_dict['patterns'])
         self.agent_lightning = AgentLightningConfig(**config_dict['agent_lightning'])
         self.training = TrainingConfig(**config_dict['training'])

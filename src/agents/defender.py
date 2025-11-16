@@ -7,7 +7,7 @@ Uses in-context learning via dynamic prompts.
 
 import json
 import os
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from anthropic import Anthropic

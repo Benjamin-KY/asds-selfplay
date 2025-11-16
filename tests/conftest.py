@@ -6,6 +6,7 @@ import pytest
 import tempfile
 import shutil
 from pathlib import Path
+from unittest.mock import Mock
 
 from src.knowledge.graph import SecurityKnowledgeGraph, SecurityPattern, PatternType
 from src.rl.store import LightningStore
@@ -58,3 +59,9 @@ def sample_pattern():
         risk_level="critical",
         cwe_id="CWE-89"
     )
+
+
+@pytest.fixture
+def mock_llm():
+    """Mock LLM client for testing without API key"""
+    return Mock()
