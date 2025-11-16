@@ -26,6 +26,7 @@ class RewardsConfig:
     false_negative: float
     fix_worked: float
     fix_failed: float
+    calibration_bonus_weight: float
 
 
 @dataclass

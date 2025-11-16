@@ -21,6 +21,9 @@ rewards:
   fix_worked: 15.0         # Value for working fix (-25% from 20.0, prevents fix inflation)
   fix_failed: -3.0         # Penalty if fix didn't work
 
+  # Calibration bonus (rewards well-calibrated confidence predictions)
+  calibration_bonus_weight: 10.0  # Multiplier for (1 - brier_score), encourages honest uncertainty
+
   # Expected impact: +15-25% precision, 2-3x learning speed, eliminates gaming
 
 # Attacker reward function (Game theory optimized - creates adversarial pressure)

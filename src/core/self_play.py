@@ -195,9 +195,15 @@ class SelfPlayTrainer:
         print(f"   Novel exploit types: {metrics['novel_exploit_types']}")
 
         # Phase 6: Calculate rewards
-        reward = self._calculate_reward(metrics)
+        reward = self._calculate_reward(metrics, defense_trace.findings)
         attacker_reward = self._calculate_attacker_reward(metrics)
+
+        # Calculate calibration score for display
+        avg_brier = self._calculate_average_brier_score(defense_trace.findings)
+
         print(f"\n💰 DEFENDER REWARD: {reward:.2f}")
+        if avg_brier is not None:
+            print(f"   📊 Calibration (Brier): {avg_brier:.3f} (lower is better)")
         print(f"⚔️  ATTACKER REWARD: {attacker_reward:.2f}")
 
         # Phase 7: Update knowledge graph
@@ -318,7 +324,26 @@ class SelfPlayTrainer:
         exploit_type = exploit.type.lower()
         return finding_type == exploit_type
 
-    def _calculate_reward(self, metrics: Dict) -> float:
+    def _calculate_average_brier_score(self, findings: List[Finding]) -> Optional[float]:
+        """
+        Calculate average Brier score for patterns used in findings.
+
+        Returns:
+            Average Brier score (0 = perfect calibration, 1 = worst), or None if no patterns tracked
+        """
+        brier_scores = []
+        for finding in findings:
+            if finding.pattern_id and finding.pattern_id in self.kg.patterns:
+                pattern = self.kg.patterns[finding.pattern_id]
+                if pattern.calibration_count > 0:  # Only include if we have calibration data
+                    brier_scores.append(pattern.brier_score)
+
+        if not brier_scores:
+            return None
+
+        return sum(brier_scores) / len(brier_scores)
+
+    def _calculate_reward(self, metrics: Dict, findings: List[Finding]) -> float:
         """
         Calculate reward for this episode.
 
@@ -327,19 +352,30 @@ class SelfPlayTrainer:
         - Penalize false positives (wasted effort)
         - Heavily penalize false negatives (missed vulnerabilities)
         - Bonus for fixes that work
+        - Bonus for well-calibrated predictions (low Brier score)
         """
         tp = metrics['true_positives']
         fp = metrics['false_positives']
         fn = metrics['false_negatives']
         fixes_worked = metrics['fixes_that_worked']
 
-        # Use weights from config
-        reward = (
+        # Base reward from detections and fixes
+        base_reward = (
             self.reward_weights['true_positive'] * tp
             + self.reward_weights['false_positive'] * fp  # Already negative in config
             + self.reward_weights['false_negative'] * fn   # Already negative in config
             + self.reward_weights['fix_worked'] * fixes_worked
         )
+
+        # Calibration bonus: reward well-calibrated confidence predictions
+        calibration_bonus = 0.0
+        avg_brier = self._calculate_average_brier_score(findings)
+        if avg_brier is not None:
+            # Brier score: 0 = perfect, 1 = worst
+            # Bonus = weight * (1 - brier_score), so perfect calibration gets full bonus
+            calibration_bonus = self.reward_weights['calibration_bonus_weight'] * (1.0 - avg_brier)
+
+        reward = base_reward + calibration_bonus
 
         return reward
 
@@ -386,10 +422,12 @@ class SelfPlayTrainer:
                     for exploit in attacker_exploits
                 )
 
+                # Update effectiveness with calibration tracking
                 self.kg.update_pattern_effectiveness(
                     pattern_id=finding.pattern_id,
                     is_true_positive=is_tp,
-                    is_false_negative=False
+                    is_false_negative=False,
+                    confidence=finding.confidence  # Track calibration
                 )
 
         # Check for false negatives (attacker found but defender missed)
