@@ -44,7 +44,7 @@ class TestSecurityPattern:
         # Precision = 8/10 = 0.8
         # Recall = 8/10 = 0.8
         # F1 = 2 * (0.8 * 0.8) / (0.8 + 0.8) = 0.8
-        assert sample_pattern.f1_score == 0.8
+        assert sample_pattern.f1_score == pytest.approx(0.8)
 
     def test_effectiveness_with_few_observations(self, sample_pattern):
         """Test effectiveness returns neutral for new patterns"""

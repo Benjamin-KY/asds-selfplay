@@ -468,6 +468,37 @@ class SecurityKnowledgeGraph:
             "low_effectiveness_patterns": len(self.get_ineffective_patterns())
         }
 
+    def get_pattern(self, pattern_id: str) -> Optional[SecurityPattern]:
+        """Get a specific pattern by ID"""
+        return self.patterns.get(pattern_id)
+
+    def get_all_patterns(self) -> List[SecurityPattern]:
+        """Get all patterns in the knowledge graph"""
+        return list(self.patterns.values())
+
+    def save(self):
+        """Explicitly save all patterns to database (normally auto-saved)"""
+        # Patterns are auto-saved when added via add_pattern()
+        # This method is provided for explicit save operations
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        for pattern in self.patterns.values():
+            cursor.execute("""
+                INSERT OR REPLACE INTO patterns (
+                    id, name, pattern_type, code_example, language, risk_level, cwe_id,
+                    observations, true_positives, false_positives, false_negatives
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                pattern.id, pattern.name, pattern.pattern_type.value,
+                pattern.code_example, pattern.language, pattern.risk_level,
+                pattern.cwe_id, pattern.observations, pattern.true_positives,
+                pattern.false_positives, pattern.false_negatives
+            ))
+
+        conn.commit()
+        conn.close()
+
     def export_for_visualization(self, output_path: str = "data/graph_viz.json"):
         """Export graph for visualization"""
         nodes = []

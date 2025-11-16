@@ -14,6 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from src.knowledge.graph import SecurityKnowledgeGraph
+from src.patterns.library import initialize_pattern_library
 from src.agents.defender import DefenderAgent
 from src.agents.attacker import AttackerAgent
 from src.core.self_play import SelfPlayTrainer
@@ -71,6 +72,10 @@ def main():
     # Initialize components
     print("Initializing components...")
     kg = SecurityKnowledgeGraph()
+
+    # Initialize pattern library (52+ vulnerability patterns)
+    pattern_count = initialize_pattern_library(kg)
+    print(f"Loaded {pattern_count} vulnerability patterns into knowledge graph")
 
     # Initialize RL store and trainer if enabled
     rl_store = None
