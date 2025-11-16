@@ -146,21 +146,54 @@ export ANTHROPIC_API_KEY="your-key"
 ### Quick Start
 ```bash
 # Run self-play training
-python src/train.py --episodes 100 --dataset vulnerable_code/
+python train.py --episodes 100 --dataset vulnerable
 
-# Analyze real code
-python src/analyze.py --file myapp/auth.py
+# Run benchmark evaluation
+python scripts/run_benchmark.py --limit 100 --language python
 
-# View metrics
-python src/dashboard.py
+# Download CVEFixes dataset
+python scripts/download_cvefixes.py
+
+# Explore dataset statistics
+python scripts/explore_cvefixes.py --stats
 ```
+
+## Benchmarking
+
+Evaluate defender performance on **real-world vulnerabilities** from CVEFixes dataset:
+
+```bash
+# Quick evaluation (100 samples)
+python scripts/run_benchmark.py --limit 100 --language python
+
+# Comprehensive evaluation (1000 samples)
+python scripts/run_benchmark.py --limit 1000
+
+# Compare with baseline
+python scripts/run_benchmark.py --limit 100 --compare-with data/benchmarks/baseline.json
+```
+
+**Dataset Coverage:**
+- 11,873 real CVEs from production software
+- 272 CWE types (SQL injection, XSS, command injection, etc.)
+- 138,974 vulnerable methods with before/after fixes
+- Multi-language support (Python, JavaScript, C, Java, etc.)
+
+**Metrics Tracked:**
+- Precision, Recall, F1 Score
+- Detection rate per CWE type
+- Confidence calibration (Brier score)
+- Performance vs. SOTA baselines
+
+See `docs/BENCHMARKING.md` for complete guide.
 
 ## Use Cases
 
 1. **Training:** Run self-play on vulnerable code datasets
-2. **Testing:** Validate on CTF challenges and known CVEs
-3. **Production:** Apply learned patterns to real codebases
-4. **Research:** Experiment with adversarial learning for security
+2. **Benchmarking:** Evaluate on CVEFixes real-world vulnerabilities
+3. **Testing:** Validate on CTF challenges and known CVEs
+4. **Production:** Apply learned patterns to real codebases
+5. **Research:** Experiment with adversarial learning for security
 
 ## Project Status
 
@@ -188,13 +221,17 @@ python src/dashboard.py
 - [x] **Security documentation** (SECURITY.md, DATA_POLICY.md)
 
 ### Next Phase (Research Validation)
-- [ ] CVEFixes dataset integration (12,107 commits)
+- [x] **CVEFixes dataset integration** (12,107 commits, 272 CWE types)
+- [x] **Benchmark evaluation framework** (precision, recall, F1 tracking)
+- [ ] Run 100-episode baseline evaluation
+- [ ] Run 1000-episode training trajectory
 - [ ] SOTA comparison (CodeT5, GraphCodeBERT, SecureFalcon)
 - [ ] Multi-language support (JavaScript, Java, Go)
 - [ ] Security hardening (access controls, encryption at rest)
 - [ ] Compliance certification (ISO 27001, SOC 2)
 
 See `AGENT_ANALYSIS_TODO.md` for complete 150+ task roadmap.
+See `docs/BENCHMARKING.md` for comprehensive benchmarking guide.
 
 ### Recent Improvements (v2.0)
 
