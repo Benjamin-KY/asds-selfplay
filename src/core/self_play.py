@@ -198,12 +198,21 @@ class SelfPlayTrainer:
         reward = self._calculate_reward(metrics, defense_trace.findings)
         attacker_reward = self._calculate_attacker_reward(metrics)
 
-        # Calculate calibration score for display
+        # Calculate calibration score and exploration metrics for display
         avg_brier = self._calculate_average_brier_score(defense_trace.findings)
+
+        # Count low-observation patterns used
+        low_obs_count = sum(
+            1 for finding in defense_trace.findings
+            if finding.pattern_id and finding.pattern_id in self.kg.patterns
+            and self.kg.patterns[finding.pattern_id].observations < self.reward_weights['exploration_threshold']
+        )
 
         print(f"\n💰 DEFENDER REWARD: {reward:.2f}")
         if avg_brier is not None:
             print(f"   📊 Calibration (Brier): {avg_brier:.3f} (lower is better)")
+        if low_obs_count > 0:
+            print(f"   🔍 Exploration: {low_obs_count} low-observation patterns used")
         print(f"⚔️  ATTACKER REWARD: {attacker_reward:.2f}")
 
         # Phase 7: Update knowledge graph
@@ -375,7 +384,21 @@ class SelfPlayTrainer:
             # Bonus = weight * (1 - brier_score), so perfect calibration gets full bonus
             calibration_bonus = self.reward_weights['calibration_bonus_weight'] * (1.0 - avg_brier)
 
-        reward = base_reward + calibration_bonus
+        # Exploration bonus: reward using low-observation patterns
+        exploration_bonus = 0.0
+        low_observation_count = 0
+        exploration_threshold = self.reward_weights['exploration_threshold']
+
+        for finding in findings:
+            if finding.pattern_id and finding.pattern_id in self.kg.patterns:
+                pattern = self.kg.patterns[finding.pattern_id]
+                if pattern.observations < exploration_threshold:
+                    low_observation_count += 1
+
+        exploration_bonus = self.reward_weights['low_observation_bonus'] * low_observation_count
+
+        # Total reward
+        reward = base_reward + calibration_bonus + exploration_bonus
 
         return reward
 

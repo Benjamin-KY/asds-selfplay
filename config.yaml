@@ -24,7 +24,11 @@ rewards:
   # Calibration bonus (rewards well-calibrated confidence predictions)
   calibration_bonus_weight: 10.0  # Multiplier for (1 - brier_score), encourages honest uncertainty
 
-  # Expected impact: +15-25% precision, 2-3x learning speed, eliminates gaming
+  # Exploration bonuses (encourages pattern diversity and novel discoveries)
+  low_observation_bonus: 5.0  # Bonus per low-observation pattern used (observations < 10)
+  exploration_threshold: 10   # Observation count threshold for "low observation"
+
+  # Expected impact: +15-25% precision, 2-3x learning speed, eliminates gaming, +40% pattern diversity
 
 # Attacker reward function (Game theory optimized - creates adversarial pressure)
 # The attacker is rewarded for finding vulnerabilities the defender missed

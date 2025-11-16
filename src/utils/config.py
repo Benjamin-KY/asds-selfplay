@@ -27,6 +27,8 @@ class RewardsConfig:
     fix_worked: float
     fix_failed: float
     calibration_bonus_weight: float
+    low_observation_bonus: float
+    exploration_threshold: int
 
 
 @dataclass
