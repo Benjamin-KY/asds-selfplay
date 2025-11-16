@@ -486,9 +486,9 @@ if __name__ == "__main__":
 
     # Simulate learning
     print("\nSimulating feedback...")
-    kg.update_pattern_effectiveness("PATTERN-SQL-001", is_true_positive=True)
-    kg.update_pattern_effectiveness("PATTERN-SQL-001", is_true_positive=True)
-    kg.update_pattern_effectiveness("PATTERN-SQL-001", is_false_negative=False)
+    kg.update_pattern_effectiveness("PATTERN-SQL-001", is_true_positive=True, is_false_negative=False)
+    kg.update_pattern_effectiveness("PATTERN-SQL-001", is_true_positive=True, is_false_negative=False)
+    kg.update_pattern_effectiveness("PATTERN-SQL-001", is_true_positive=False, is_false_negative=False)
 
     pattern = kg.patterns["PATTERN-SQL-001"]
     print(f"PATTERN-SQL-001 after feedback:")

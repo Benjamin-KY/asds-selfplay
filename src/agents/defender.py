@@ -277,6 +277,10 @@ class DefenderAgent:
 
 if __name__ == "__main__":
     # Test defender agent
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
     from src.knowledge.graph import SecurityKnowledgeGraph
 
     # Create knowledge graph
