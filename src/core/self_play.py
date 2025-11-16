@@ -15,6 +15,7 @@ from src.agents.attacker import AttackerAgent, Exploit
 from src.knowledge.graph import SecurityKnowledgeGraph
 from src.utils.config import get_config
 from src.utils.logging_config import get_logger
+from src.utils.audit import TamperEvidentLogger
 
 logger = get_logger(__name__)
 
@@ -109,7 +110,10 @@ class SelfPlayTrainer:
         # Track historical exploit types for novelty detection
         self.seen_exploit_types: set = set()
 
-        logger.info(f"SelfPlayTrainer initialized (RL enabled: {self.rl_enabled})")
+        # Initialize tamper-evident audit logger
+        self.audit_logger = TamperEvidentLogger()
+
+        logger.info(f"SelfPlayTrainer initialized (RL enabled: {self.rl_enabled}, Audit: enabled)")
 
     def train_episode(
         self,
@@ -484,12 +488,41 @@ class SelfPlayTrainer:
         return exploit_to_pattern.get(exploit.type)
 
     def _save_episode(self, episode: TrainingEpisode):
-        """Save episode to disk"""
+        """
+        Save episode to disk with tamper-evident audit logging.
+
+        Creates:
+        1. Episode JSON file (data/episodes/episode_XXXX.json)
+        2. Cryptographically signed audit entry (data/audit/audit.log)
+        """
         filename = f"episode_{episode.episode_number:04d}.json"
         filepath = self.episodes_dir / filename
 
+        # Convert episode to dictionary
+        episode_dict = episode.to_dict()
+
+        # Save episode JSON file
         with open(filepath, 'w') as f:
-            json.dump(episode.to_dict(), f, indent=2, default=str)
+            json.dump(episode_dict, f, indent=2, default=str)
+
+        # Create tamper-evident audit entry
+        audit_entry = self.audit_logger.log_episode(
+            episode_number=episode.episode_number,
+            episode_data=episode_dict,
+            metadata={
+                "filepath": str(filepath),
+                "reward": episode.reward,
+                "attacker_reward": episode.attacker_reward,
+                "true_positives": episode.true_positives,
+                "false_positives": episode.false_positives,
+                "false_negatives": episode.false_negatives
+            }
+        )
+
+        logger.debug(
+            f"Episode {episode.episode_number} saved with audit signature: "
+            f"{audit_entry['signature'][:16]}..."
+        )
 
     def get_learning_progress(self) -> Dict:
         """Get metrics showing learning progress"""
