@@ -1,0 +1,74 @@
+{
+  "name": "ASDS Self-Play with Specialized Agents",
+  "description": "Adaptive Security Defence System v2 with Game Theory, Compliance, and Research agents",
+  "skills": [
+    {
+      "name": "game-theory-analysis",
+      "description": "Game theory expert analyzing strategic interactions, equilibria, and incentive structures",
+      "path": ".claude/skills/game-theory-analysis.md"
+    },
+    {
+      "name": "compliance-documentation",
+      "description": "Compliance expert ensuring proper documentation, audit trails, and regulatory requirements",
+      "path": ".claude/skills/compliance-documentation.md"
+    },
+    {
+      "name": "security-research",
+      "description": "Security researcher finding relevant papers, tools, datasets, and validating hypotheses",
+      "path": ".claude/skills/security-research.md"
+    }
+  ],
+  "hooks": {
+    "user-prompt-submit": ".claude/hooks/user-prompt-submit.sh"
+  },
+  "agents": {
+    "game-theory": {
+      "name": "Game Theory Agent",
+      "role": "Strategic Analysis Expert",
+      "skills": ["game-theory-analysis"],
+      "description": "Analyzes defender vs attacker dynamics, reward functions, Nash equilibria, and mechanism design",
+      "triggers": [
+        "reward function",
+        "strategy",
+        "equilibrium",
+        "incentive",
+        "payoff",
+        "game theory"
+      ]
+    },
+    "compliance": {
+      "name": "Compliance Agent",
+      "role": "Documentation and Audit Expert",
+      "skills": ["compliance-documentation"],
+      "description": "Ensures proper documentation, audit trails, evidence management, and regulatory compliance",
+      "triggers": [
+        "commit",
+        "documentation",
+        "audit",
+        "compliance",
+        "evidence",
+        "regulatory"
+      ]
+    },
+    "research": {
+      "name": "Research Agent",
+      "role": "Security Research Specialist",
+      "skills": ["security-research"],
+      "description": "Searches academic papers, tools, datasets, and validates hypotheses with external research",
+      "triggers": [
+        "research",
+        "paper",
+        "prior art",
+        "benchmark",
+        "dataset",
+        "hypothesis",
+        "validate"
+      ]
+    }
+  },
+  "settings": {
+    "auto_invoke_agents": true,
+    "agent_collaboration": true,
+    "preserve_context": true
+  }
+}
